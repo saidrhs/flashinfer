@@ -283,6 +283,10 @@ One subclass per compilation toolchain:
   - `extra_cuda_cflags`, `extra_cflags`, `extra_ldflags`: Compiler flags
 - `JitSpecCuteDsl` (flashinfer/jit/cute_dsl_core.py) caches CuTe-DSL kernels
   (see "CuTe-DSL kernels" under Module Caching below)
+- The optional TIRx KDA backend uses a private `JitSpec` in
+  `flashinfer/kda_kernels/tirx/cache.py` to cache TVM modules, with source/compiler
+  fingerprints and artifact checksums. Its TVM/TIRx dependencies are loaded only
+  by explicit `recurrent_kda(..., backend="tirx")`; see `docs/api/kda.rst`.
 
 ### JIT Directory Rules
 
@@ -616,6 +620,9 @@ match what the code uses today; values are strings unless noted.
 | `FLASHINFER_EXTRA_CUDAFLAGS` | unset | `flashinfer/jit/cpp_ext.py` | Extra compiler flags passed to `nvcc`. |
 | `FLASHINFER_EXTRA_LDFLAGS` | unset | `flashinfer/jit/cpp_ext.py` | Extra linker flags passed to the linker. |
 | `FLASHINFER_CAKE_GDN_VALIDATE_SLOTS` | `0` | `flashinfer/gdn_decode.py` | `1` enables extra slot-validation checks in the CAKE GDN path for debugging or invariant validation. Leave disabled in normal runs to avoid extra validation overhead. |
+| `FLASHINFER_CAKE_DSA_CHECK_DST_MAP` | `0` | `flashinfer/experimental/cake_dsa_train/cake_backend.py` | `1` makes the CAKE DSA training backward validate the values of a caller-provided `dkv_dst_map` (every destination row must lie in `[0, S_dst)` of `dkv_acc`) on each call, at the cost of one device synchronization; the kernel itself does not range-check the map. Leave disabled in normal runs. |
+| `FLASHINFER_CAKE_DSA_TRAIN_BINDING_CACHE` | `1` | `flashinfer/experimental/cake_dsa_train/cake_backend.py` | `0` disables the CAKE DSA training binding cache (every call re-validates and re-binds its inputs instead of launching from the remembered argument plans). Read once at import. |
+| `FLASHINFER_CAKE_DSA_TRAIN_BINDING_CACHE_CAPACITY` | `256` | `flashinfer/experimental/cake_dsa_train/cake_backend.py` | Number of forward / backward bindings the CAKE DSA training binding cache keeps before evicting the least recently used one. |
 | `FLASHINFER_JIT_CACHE_PROVIDER_ARCHS` | required | `flashinfer-jit-cache/build_backend.py` | Space-separated provider architectures added to a shim wheel's exact `Requires-Dist` metadata. |
 | `FLASHINFER_JIT_CACHE_PROVIDER_ARCH` | required | `flashinfer-jit-cache-provider/package_config.py` | Select exactly one architecture, such as `9.0a` or `sm120f`, when building a binary provider wheel. |
 
@@ -636,6 +643,7 @@ CI `docker run --rm` boundary provides final cleanup for those processes.
 | `FLASHINFER_CUBINS_REPOSITORY` | `https://edge.urm.nvidia.com/artifactory/sw-kernelinferencelibrary-public-generic-local` | `flashinfer/jit/cubin_loader.py` | Base URL the loader downloads cubins from. Point to a mirror for offline or air-gapped setups. |
 | `FLASHINFER_CUBIN_CHECKSUM_DISABLED` | unset | `flashinfer/jit/cubin_loader.py` | If set, skip SHA checksum verification of downloaded cubins. Debug aid only. |
 | `FLASHINFER_CUBIN_DOWNLOAD_THREADS` | `4` | `flashinfer/artifacts.py` | Thread-pool size used by `flashinfer artifacts download`. |
+| `FLASHINFER_CUBIN_RETRY_WINDOW_SECONDS` | `0` | `flashinfer/artifacts.py` | Total wall-clock retry window for `download_artifacts()`. A failed artifact keeps re-attempting, with capped exponential backoff, until the window closes (e.g. `86400` for a 24-hour nightly window). `0` keeps only `download_file()`'s own per-call retry budget. |
 | `FLASHINFER_NO_DOWNLOAD` | unset | `flashinfer/jit/cubin_loader.py` | Hard-fail if a cubin is missing locally instead of attempting to download. Useful in CI / locked-down environments. |
 | `FLASHINFER_DSL_FMHA_LOCAL_DIR` | unset | `flashinfer/attention/cute_dsl/fmha.py` | Path to a local checkout of the CuTe-DSL FMHA kernel sources. The loader checks here before downloading. |
 | `FLASHINFER_LOGGING_LEVEL` | `INFO` | `flashinfer/artifacts.py`, `flashinfer/jit/core.py` | Python logging level for the artifacts/cubin loader and the JIT compiler (`DEBUG`/`INFO`/`WARNING`/`ERROR`). Distinct from `FLASHINFER_LOGLEVEL`. |
